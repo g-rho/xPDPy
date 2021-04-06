@@ -1,0 +1,13 @@
+version	    when?	what?   
+
+0.0.1.0     06.04.2021  sample argument renamed into sample.frac + bug fixed (ln. 76): sample not used before
+                        example added to xpy() for user-defined predict function for classification (...pkg klaR added to Suggests)
+			importFrom magrittr %>% added  
+                        pkg renamed into exPDPy
+
+0.0.0.9003  31.03.2021  Speedups by C.Koehler: sample argument, parallel argument, ssize, duplicated 
+			                       pfunction argument for user-defined predict function
+
+0.0.0.9002  15.10.2020	... argument added in order to allow for predict() functions with additional arguments;
+				        axes swapped in xpy()'s visualization. 
+0.0.0.9001  05.03.2020 	Initial built.
