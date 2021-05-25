@@ -4,7 +4,15 @@
 \alias{fw.xpy}
 \title{Forward variable selection for PDP explanation}
 \usage{
-fw.xpy(model, x, target, ...)
+fw.xpy(
+  model,
+  x,
+  target,
+  parallel = TRUE,
+  sample.frac = 1,
+  pfunction = NULL,
+  ...
+)
 }
 \arguments{
 \item{model}{A model with corresponding predict function that returns numeric values.}
@@ -12,6 +20,12 @@ fw.xpy(model, x, target, ...)
 \item{x}{Data frame.}
 
 \item{target}{Character specifying the name of the (numeric) target variable (must be contained in data).}
+
+\item{parallel}{Logical specifying whether computation should be parallel.}
+
+\item{sample.frac}{fraction-size for sampling of x.}
+
+\item{pfunction}{User generated predict function with arguments \code{pfunction(model, newdata)}.}
 
 \item{...}{Further arguments to be passed to the \code{predict()} method of the \code{model}.}
 }

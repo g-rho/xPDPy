@@ -14,6 +14,9 @@ pdp2d(
   right = 0.8,
   top = 0.95,
   digits = 1,
+  parallel = TRUE,
+  sample.frac = 1,
+  pfunction = NULL,
   ...
 )
 }
@@ -38,10 +41,71 @@ In case of \code{"both"} two plots are created.}
 
 \item{digits}{Nuber of digits for rounding in the legend.}
 
+\item{parallel}{Logical specifying whether computation should be parallel.}
+
+\item{sample.frac}{fraction-size for sampling of x.}
+
+\item{pfunction}{User generated predict function with arguments \code{pfunction(model, newdata)}.}
+
 \item{...}{Further arguments to be passed to the \code{predict()} method of the \code{model}.}
 }
 \description{
 Visualization of 2D PDP vs. unexplained residual predictions.
+}
+\details{
+fw.xpy <- function(model, x, target, parallel = TRUE, sample.frac = 1, pfunction = NULL, ...){
+  
+  
+  
+  # Initialization and selection of first variable
+  n <- 1
+  cat("Step", n, "\n")
+  
+  sel   <- NULL
+  trace <- NULL
+  nms <- nms.full <- names(x)[-which(names(x) == target)]
+  xpys <- rep(NA, length(nms))
+  names(xpys) <- nms
+  
+  for(v in nms) xpys[which(names(xpys) == v)] <- xpy(model, x, v, viz = F, ...)
+  
+  sel   <- c(sel, which.max(xpys))
+  trace <- c(trace, max(xpys, na.rm = T))
+  print(xpys)
+  cat("\n", nms.full[sel], max(xpys, na.rm = T), "\n\n")
+  
+  # forward selection variables such that explainability is maximized
+  while(length(nms) > 1){
+    n <- n + 1
+    cat("Step", n, "\n")
+    
+    nms <- nms.full[-sel]
+    xpys <- cbind(xpys, NA)
+    for(v in nms) xpys[which(rownames(xpys) == v), ncol(xpys)] <- xpy(model, x, c(names(sel), v), viz = F, ...)
+    
+    sel <- c(sel, which.max(xpys[,ncol(xpys)]))
+    colnames(xpys) <- c(paste("Step", 1:n))
+    trace <- c(trace, max(xpys, na.rm = T))
+    
+    print(xpys)
+    cat("\n", nms.full[sel], max(xpys[,ncol(xpys)], na.rm=T), "\n\n")
+  }
+  
+  res <- list(selection.order = sel, explainability = trace, details = xpys)
+  class(res) <- "vsexp"
+  return(res)
+}
+
+
+#' @export
+plot.vsexp <- function(x, ...){
+  plot(0:length(x$explainability), c(0,x$explainability), type = "l", xaxt = "n", xlab = "", ylim = c(0, 1), ylab = "explainability")
+  axis(1, at = 1:length(x$selection.order), labels = names(x$selection.order), las = 2)
+}
+
+
+#' @export
+print.vsexp <- function(x, ...) print(cbind(x$selection.order, x$explainability))
 }
 \examples{
 \dontrun{
