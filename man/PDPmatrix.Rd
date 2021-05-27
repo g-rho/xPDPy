@@ -4,7 +4,16 @@
 \alias{PDPmatrix}
 \title{Scatterplot matrix of 2D partial dependence plots}
 \usage{
-PDPmatrix(model, x, vnames, depth = 21, alpha = 2/3, ...)
+PDPmatrix(
+  model,
+  x,
+  vnames,
+  depth = 21,
+  alpha = 2/3,
+  sample.frac = 1,
+  pfunction = NULL,
+  ...
+)
 }
 \arguments{
 \item{model}{A model with corresponding predict function that returns numeric values.}
@@ -16,6 +25,10 @@ PDPmatrix(model, x, vnames, depth = 21, alpha = 2/3, ...)
 \item{depth}{Integer specifiying the number colours in the heat map.}
 
 \item{alpha}{Numeric value for alpha blending of the points in the scatter plot.}
+
+\item{sample.frac}{fraction-size for sampling of x.}
+
+\item{pfunction}{User generated predict function with arguments \code{pfunction(model, newdata)}.}
 
 \item{...}{Further arguments to be passed to the \code{predict()} method of the \code{model}.}
 }
