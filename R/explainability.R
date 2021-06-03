@@ -146,10 +146,10 @@ xpy <- function(model, x, vnames, viz = TRUE, parallel = TRUE, sample.frac = 1, 
     for (i in from){
       xx <- merge(xs[i:min((i+ssize-1),nrow(xs)),], xrest , by.x = NULL, by.y = NULL)
       ID <- xx[,"ind"]
-      xx$yhat <- pfunction(model, xx)
+      xx$yhat <- pfunction(model, xx, ...)
       pdps <- rbind(pdps, aggregate(xx$yhat, list(ID), mean))
     }
-    x$pred <- pfunction(model, x)
+    x$pred <- pfunction(model, x, ...)
     avpred <- mean(x$pred)
     preds <- merge(pdps, x[, c("pred","ind"), drop = FALSE], by.x = "Group.1", by.y = "ind")
     colnames(preds)[2] <- "values"
@@ -237,7 +237,7 @@ fw.xpy <- function(model, x, target, parallel = TRUE, sample.frac = 1, pfunction
   xpys <- rep(NA, length(nms))
   names(xpys) <- nms
   
-  x$pred <-  predict(model, x)
+  x$pred <-  pfunction(model, x, ...)
   avpred <- mean(x$pred)
   
   if(parallel) {
@@ -247,12 +247,8 @@ fw.xpy <- function(model, x, target, parallel = TRUE, sample.frac = 1, pfunction
   
   # helper function
   fw.xpy.help <- function(model, xh, vnames, ssize, pckgs, cl, parallel, pfunction, ...){
-    
-    #xh$ind <- group_indices(x, xh[,names(xh) %in% vnames])
-    
     xh <- xh %>% group_by(xh[,names(xh) %in% vnames])
     xh$ind <- xh %>% group_indices()
-    
     xs <- xh[!duplicated(xh[,"ind"]), names(xh) %in% append("ind", vnames), drop = FALSE]
     xrest <- xh[, !names(xh) %in% append("ind", vnames), drop = FALSE]
     
@@ -262,7 +258,7 @@ fw.xpy <- function(model, x, target, parallel = TRUE, sample.frac = 1, pfunction
         ifrom <- (i-1)*ssize +1
         ito <- min(i*ssize, nrow(xs))
         xx <- merge(xs[ifrom:ito,], xrest, by = NULL)
-        xx$yhat <- pfunction(model, subset(xx, select = -c(ind)))
+        xx$yhat <- pfunction(model, subset(xx, select = -c(ind)), ...)
         return(pred = tapply(xx$yhat, xx$ind, mean))
       }
       pdps <- stack(pdps)
@@ -277,7 +273,7 @@ fw.xpy <- function(model, x, target, parallel = TRUE, sample.frac = 1, pfunction
       for (i in from){
         xx <- merge(xs[i:min((i+ssize-1),nrow(xs)),], xrest , by.x = NULL, by.y = NULL)
         ID <- xx[,"ind"]
-        xx$yhat <- pfunction(model, xx)
+        xx$yhat <- pfunction(model, xx, ...)
         pdps <- rbind(pdps, aggregate(xx$yhat, list(ID), mean))
       }
       preds <- merge(pdps, xh[, c("pred","ind"), drop = FALSE], by.x = "Group.1", by.y = "ind")
@@ -485,7 +481,7 @@ pdp2d <- function(model, x, vnames, type = "pdp", depth = 21, alpha = 2/3, right
       xx <- merge(xs[ifrom:ito,], xrest, by = NULL)
       
       # predict
-      xx$yhat <- pfunction(model, xx)#, ...)
+      xx$yhat <- pfunction(model, xx, ...)
       
       # compute average prediction
       return(pred = tapply(xx$yhat, xx$ind, mean))
@@ -506,7 +502,7 @@ pdp2d <- function(model, x, vnames, type = "pdp", depth = 21, alpha = 2/3, right
     for (i in from){
       xx <- merge(xs[i:min((i+ssize-1),nrow(xs)),], xrest , by.x = NULL, by.y = NULL)
       ID <- xx[,"ind"]
-      xx$yhat <- pfunction(model, xx)
+      xx$yhat <- pfunction(model, xx, ...)
       pdps <- rbind(pdps, aggregate(xx$yhat, list(ID), mean))
     }
     colnames(pdps)[1] <- "ind"
@@ -518,7 +514,7 @@ pdp2d <- function(model, x, vnames, type = "pdp", depth = 21, alpha = 2/3, right
   pdps <- left_join(x[,"ind", drop = FALSE], pdps, by = c("ind" = "ind"))
   
   
-  pred <- predict(model, x)#, ...)
+  pred <- pfunction(model, x, ...)
   
   if(type == "both") par(mfrow = c(1,2))
   if(type != "gap"){
@@ -567,6 +563,8 @@ pdp2d <- function(model, x, vnames, type = "pdp", depth = 21, alpha = 2/3, right
 #' @param vnames  Character vector of the variable set for which the patial dependence function is to be computed.
 #' @param depth   Integer specifiying the number colours in the heat map.
 #' @param alpha   Numeric value for alpha blending of the points in the scatter plot.
+#' @param sample.frac fraction-size for sampling of x.
+#' @param pfunction   User generated predict function with arguments \code{pfunction(model, newdata)}.
 #' @param ...     Further arguments to be passed to the \code{predict()} method of the \code{model}.
 #'
 #' @export
@@ -589,7 +587,7 @@ pdp2d <- function(model, x, vnames, type = "pdp", depth = 21, alpha = 2/3, right
 #'   }
 #'
 #' @rdname PDPmatrix
-PDPmatrix <- function(model, x, vnames, depth = 21, alpha = 2/3, ...){
+PDPmatrix <- function(model, x, vnames, depth = 21, alpha = 2/3, sample.frac = 1, pfunction = NULL, ...){
   n <- length(vnames)
   mat <- matrix(0,n,n)
   k <- 1
@@ -600,35 +598,57 @@ PDPmatrix <- function(model, x, vnames, depth = 21, alpha = 2/3, ...){
     }
   }
   layout(mat, rep(2,n), rep(2,n))
-
-  pred <- predict(model, x, ...)
+  
+  # number of unique observations to give to processors each step
+  ssize <- 20
+  
+  # Sampling
+  x <- sample_n(x, round(nrow(x)*sample.frac))
+  
+  # checking for predict_function parameter
+  if (is.null(pfunction)) {
+    # predict_function not specified
+    pfunction <- predict
+  }
+  
+  pred <- pfunction(model, x, ...)
   minmax <- range(pred)
   colrefs <- seq(minmax[1], minmax[2], length.out = depth)
-
+  
   for(i in 1:(n-1)){
-
+    
     plot(5, 5, type="n", axes=FALSE, ann=FALSE, xlim=c(0, 10), ylim = c(0,10))
     text(5,5, vnames[i], cex = 2)
-
+    
     for(j in (i+1):n){
-      xs    <- x[, names(x) %in% vnames[c(i,j)], drop = FALSE]
-      xs    <- data.frame(ID = 1:nrow(xs), xs)
-      xrest <- x[, !names(x) %in% vnames[c(i,j)], drop = FALSE]
-
-      xx    <- merge(xs, xrest, by.x = NULL, by.y = NULL)
-      ID <- xx[,1]
-
-      xx$yhat <- predict(model, xx[,-1], ...)
-      pdps <- aggregate(xx$yhat, list(ID), mean)
-
-      cols <- sapply(pdps$x, function(z) which.min(abs(z-colrefs)))
+      
+      x <- x %>% group_by(x[,names(x) %in% vnames[c(i,j)], drop = FALSE])
+      x$ind <- x %>% group_indices()
+      xs <- x[!duplicated(x[,"ind"]), names(x) %in% append("ind", vnames[c(i,j)])]
+      xrest <- x[, !names(x) %in% append("ind", vnames[c(i,j)]), drop = FALSE]
+      
+      pdps <- NULL
+      from <- seq(1, nrow(xs), by = ssize)
+      for (k in from){
+        xx <- merge(xs[k:min((k+ssize-1),nrow(xs)),], xrest , by.x = NULL, by.y = NULL)
+        ID <- xx[,"ind"]
+        xx$yhat <- pfunction(model, xx, ...)
+        pdps <- rbind(pdps, aggregate(xx$yhat, list(ID), mean))
+      }
+      colnames(pdps)[1] <- "ind"
+      colnames(pdps)[2] <- "values"
+      
+      pdps <- left_join(x[,"ind", drop = FALSE], pdps, by = c("ind" = "ind"))
+      
+      
+      cols <- sapply(pdps$values, function(z) which.min(abs(z-colrefs)))
       cols <- colorRamps::blue2red(depth)[cols]
       cols <- GISTools::add.alpha(cols, alpha)
       par(mar=c(1,1,1,1))
       plot(x[[vnames[j]]], x[[vnames[i]]], pch = 16, col = cols, xlab = vnames[1], ylab = vnames[2], main = "")
     }
   }
-
+  
   plot(5, 5, type="n", axes=FALSE, ann=FALSE, xlim=c(0, 10), ylim = c(0,10))
   text(5,5, vnames[n], cex = 2)
 }
